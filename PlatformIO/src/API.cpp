@@ -12,6 +12,8 @@
 #include "io.h"
 #include "power_manager.h"
 #include "tasks.h"
+#include "wifi_manager.h"
+#include "ota_manager.h"
 
 static const char* kKeyAirOut        = "airOut";
 static const char* kKeyZeroPreset    = "zeroPreset";
@@ -103,11 +105,12 @@ void loadPreferences() {
 }
 
 void setupWiFi() {
-  WiFi.hostname(wifiHostName);
-  WiFi.mode(WIFI_AP);
-  WiFi.softAPConfig(IPAddress(192, 168, 1, 1), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
-  WiFi.softAP(wifiHostName);
-  WiFi.setSleep(false);
+  // Common SoftAP + mDNS + LittleFS front-end (reachable at airlift.local).
+  wifimgr_config_t wcfg = wifiDefaultConfig();
+  wcfg.hostName  = wifiHostName;
+  wcfg.mdnsName  = "airlift";   // -> http://airlift.local
+  wcfg.fwVersion = FW_VERSION;  // injected into index.html for cache-busting
+  wifiManagerInit(&wcfg);
   DEBUG_WIFI("AP up: SSID=%s  IP=%s", wifiHostName, WiFi.softAPIP().toString().c_str());
 }
 
@@ -673,33 +676,15 @@ void setupApiServer() {
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
-  // ----- OTA -----
-  server.on("/api/ota", HTTP_POST,
-    [](AsyncWebServerRequest* req) {
-      const bool ok = !Update.hasError();
-      AsyncWebServerResponse* res = req->beginResponse(200, "application/json",
-        ok ? "{\"ok\":true}" : "{\"ok\":false}");
-      res->addHeader("Connection", "close");
-      req->send(res);
-      if (ok) {
-        delay(200);
-        ESP.restart();
-      }
-    },
-    [](AsyncWebServerRequest* req, String filename, size_t index, uint8_t* data, size_t len, bool final) {
-      if (!index) {
-        DEBUG_API("OTA start: %s", filename.c_str());
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
-      }
-      if (Update.write(data, len) != len) Update.printError(Serial);
-      if (final) {
-        if (Update.end(true)) DEBUG_API("OTA done (%u bytes)", (unsigned)(index + len));
-        else Update.printError(Serial);
-      }
-    });
+  // ----- OTA (firmware + filesystem) via the common module -----
+  // Registers /api/ota, /api/ota/fs and /api/ota/info.
+  ota_config_t ocfg = otaDefaultConfig();
+  ocfg.fwVersion = FW_VERSION;
+  otaManagerInit(&ocfg);
+  otaManagerAttach(server);
 
-  // ----- Static UI -----
-  server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+  // ----- Static UI with firmware cache-busting -----
+  wifiManagerAttachStatic(server);
 
   server.begin();
   DEBUG_API("HTTP server up");
@@ -720,7 +705,7 @@ void setupApiServer() {
 // is running). CAN only WAKES us from reduced power via pollCanRx(); it does
 // not keep us awake here.
 bool powerIsBusy() {
-  return WiFi.softAPgetStationNum() > 0;
+  return WiFi.softAPgetStationNum() > 0 || otaInProgress();
 }
 
 // ACTIVE -> REDUCED: before the radio drops, close the web server AND drop any
@@ -769,7 +754,7 @@ void serviceDeferredWifi() {
   const bool capped     = sinceWake >= kWifiWakeMaxDeferMs;
   if (!settled && !capped) return;
   s_wifiWakePending = false;
-  setupWiFi();
+  wifiManagerStartAP();
   server.begin();
   DEBUG_PWR("WiFi restored %lums after wake (%s)",
         (unsigned long)sinceWake, capped ? "cap" : "lin-ok");

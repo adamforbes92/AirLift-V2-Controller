@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>AirLift V2 Controller</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=airlift-2.11">
 </head>
 <body>
   <main class="container">
@@ -419,13 +419,39 @@
     <!-- ===================== OTA ===================== -->
     <section id="tab-ota" class="panel">
       <article class="card">
+        <h2>Device Information</h2>
+        <div class="ota-info">
+          <div><span>Firmware</span><strong id="otaFwVersion">--</strong></div>
+          <div><span>Hardware</span><strong id="otaHardware">--</strong></div>
+          <div><span>Board</span><strong id="otaBoard">--</strong></div>
+        </div>
+      </article>
+      <article class="card">
         <h2>OTA Update</h2>
-        <label>Firmware (.bin) <input id="otaBin" type="file" accept=".bin"></label>
+        <p class="hint"><strong>Filesystem</strong> updates the web interface (littlefs.bin).
+          <strong>Firmware</strong> updates the application (firmware.bin). Update the
+          filesystem first, then the firmware. The device reboots automatically once
+          the firmware upload completes.</p>
+        <div class="ota-steps" id="otaSteps">
+          <div class="ota-step" data-step="filesystem"><span class="ota-step-num">1</span> Filesystem</div>
+          <div class="ota-step" data-step="firmware"><span class="ota-step-num">2</span> Firmware</div>
+        </div>
+        <label>Update Type
+          <select id="otaType">
+            <option value="filesystem">Filesystem (web UI)</option>
+            <option value="firmware">Firmware (application)</option>
+          </select>
+        </label>
+        <label>Binary (.bin) <input id="otaBin" type="file" accept=".bin,application/octet-stream"></label>
+        <div class="ota-progress" id="otaProgressWrap" hidden>
+          <div class="ota-progress-bar" id="otaProgressBar"></div>
+          <span class="ota-progress-label" id="otaProgressLabel">0%</span>
+        </div>
         <div class="button-row"><button id="otaUploadBtn" class="btn">Upload</button></div>
         <div id="otaStatus" class="status-line">Idle</div>
       </article>
     </section>
   </main>
-  <script src="app.js"></script>
+  <script src="app.js?v=airlift-2.11"></script>
 </body>
 </html>

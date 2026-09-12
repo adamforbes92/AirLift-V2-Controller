@@ -3,7 +3,9 @@
 // ---------------------------------------------------------------------------
 // Firmware version
 // ---------------------------------------------------------------------------
-#define FW_VERSION "2.10"
+// V2.11 - shared UI theme; common wifi_manager (airlift.local) + ota_manager
+//         (firmware + filesystem OTA, /api/ota + /api/ota/fs); cache-busting.
+#define FW_VERSION "2.11"
 
 /*
 

@@ -66,6 +66,15 @@ function init() {
 
   document.getElementById("savePresetsBtn").addEventListener("click", savePresets);
   document.getElementById("otaUploadBtn").addEventListener("click", uploadOta);
+  {
+    const typeSel = document.getElementById("otaType");
+    if (typeSel) {
+      const done = otaLoadDone();
+      if (done.includes("filesystem") && !done.includes("firmware")) typeSel.value = "firmware";
+      typeSel.addEventListener("change", renderOtaSteps);
+    }
+    renderOtaSteps();
+  }
 
   const learnStartBtn = document.getElementById("learnPresetsBtn");
   if (learnStartBtn) learnStartBtn.addEventListener("click", startLearn);
@@ -534,20 +543,94 @@ function renderPresetButtons(rows) {
 }
 
 async function uploadOta() {
-  const file = document.getElementById("otaBin").files[0];
-  if (!file) { setOta("Pick a .bin first."); return; }
-  setOta("Uploading…");
-  const fd = new FormData();
-  fd.append("file", file);
-  try {
-    const res = await fetch("/api/ota", { method: "POST", body: fd });
-    const j = await res.json().catch(() => ({}));
-    setOta(j.ok ? "Done. Rebooting…" : "Failed.");
-  } catch (e) {
-    setOta("Upload error: " + e.message);
-  }
+  const fileInput = document.getElementById("otaBin");
+  const type = (document.getElementById("otaType") || {}).value || "firmware";
+  if (!fileInput.files || !fileInput.files.length) { setOta("Pick a .bin first."); return; }
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith(".bin")) { setOta("Please choose a .bin file."); return; }
+  const isFs = type === "filesystem";
+  const url = isFs ? "/api/ota/fs" : "/api/ota";
+  const field = isFs ? "filesystem" : "firmware";
+  const fd = new FormData(); fd.append(field, file, file.name);
+  const wrap = document.getElementById("otaProgressWrap");
+  const bar = document.getElementById("otaProgressBar");
+  const label = document.getElementById("otaProgressLabel");
+  const btn = document.getElementById("otaUploadBtn");
+  if (btn) btn.disabled = true;
+  if (wrap) wrap.hidden = false;
+  if (bar) bar.style.width = "0%"; if (label) label.textContent = "0%";
+  setOta("Uploading " + type + "\u2026");
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", url);
+  xhr.upload.addEventListener("progress", (e) => {
+    if (!e.lengthComputable) return;
+    const p = Math.round((e.loaded / e.total) * 100);
+    if (bar) bar.style.width = p + "%"; if (label) label.textContent = p + "%";
+  });
+  xhr.addEventListener("load", () => {
+    let ok = false;
+    try { const j = JSON.parse(xhr.responseText); ok = j.ok === true || j.success === true; }
+    catch (e) { ok = xhr.status === 200; }
+    if (ok) {
+      if (bar) bar.style.width = "100%"; if (label) label.textContent = "100%";
+      otaMarkDone(type);
+      if (isFs) {
+        // filesystem does not reboot — advance to the firmware step
+        const sel = document.getElementById("otaType");
+        if (sel) sel.value = "firmware";
+        renderOtaSteps();
+        setOta("Filesystem updated. Now upload the firmware.");
+        if (wrap) wrap.hidden = true;
+        if (btn) btn.disabled = false;
+        if (fileInput) fileInput.value = "";
+      } else {
+        setOta("Done. Rebooting\u2026");
+      }
+    }
+    else { setOta("Failed."); if (wrap) wrap.hidden = true; if (btn) btn.disabled = false; }
+  });
+  xhr.addEventListener("error", () => { setOta("Upload error. Retry."); if (wrap) wrap.hidden = true; if (btn) btn.disabled = false; });
+  xhr.send(fd);
 }
 function setOta(t) { document.getElementById("otaStatus").textContent = t; }
+
+// OTA two-step sequence: filesystem first, then firmware. Completed steps
+// persist in localStorage so the highlight survives the firmware reboot.
+const OTA_STEPS_KEY = "oh_ota_steps";
+function otaLoadDone() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(OTA_STEPS_KEY) || "{}");
+    if (!raw.ts || Date.now() - raw.ts > 15 * 60 * 1000) return [];
+    return Array.isArray(raw.done) ? raw.done : [];
+  } catch (e) { return []; }
+}
+function otaSaveDone(done) {
+  localStorage.setItem(OTA_STEPS_KEY, JSON.stringify({ done, ts: Date.now() }));
+}
+function renderOtaSteps() {
+  const sel = document.getElementById("otaType");
+  const cur = sel ? sel.value : "filesystem";
+  const done = otaLoadDone();
+  document.querySelectorAll("#otaSteps .ota-step").forEach((el) => {
+    const s = el.dataset.step;
+    el.classList.toggle("done", done.includes(s));
+    el.classList.toggle("active", s === cur && !done.includes(s));
+  });
+}
+function otaMarkDone(type) {
+  const done = otaLoadDone();
+  if (!done.includes(type)) done.push(type);
+  otaSaveDone(done);
+  renderOtaSteps();
+}
+
+// Populate the OTA device-info card from the common /api/ota/info endpoint.
+document.addEventListener("DOMContentLoaded", () => {
+  fetch("/api/ota/info").then((r) => r.json()).then((i) => {
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v || "--"; };
+    set("otaFwVersion", i.version); set("otaHardware", i.hardware); set("otaBoard", i.board);
+  }).catch(() => {});
+});
 
 // ---------- Diagnostic log ----------
 let logSince = 0;
