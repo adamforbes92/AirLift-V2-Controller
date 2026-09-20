@@ -18,6 +18,10 @@ the ESP32 **TWAI** peripheral for CAN.
 > the manifold bus transiently while a command is queued — control always
 > returns to the controller automatically.
 
+![AirLift Controller Web UI — overview, presets, settings, CAN, diagnostics and OTA](Images/airliftUI.png)
+
+![AirLift Controller Web UI — learn presets, fob actions, CAN sleep, high-side override & SavvyCAN, event log and OTA](Images/airliftUI-2.png)
+
 ![PCB Overview](Images/PCBOverview.png)
 
 ---
@@ -303,13 +307,21 @@ ignitionTask → sees flag → queueTarget(air-up | air-down) → manifold drive
 
 ### SavvyCAN
 
-Enable one setting in **Settings → SavvyCAN**:
+Enable one setting on the **Diagnostics → SavvyCAN** card:
 
 - **Wi-Fi GVRET**: connect SavvyCAN to `192.168.1.1:23` as a GVRET network device.
 - **Serial GVRET**: connect SavvyCAN to the USB serial port at `1,000,000` baud.
 
 All received frames are forwarded through a queue; SavvyCAN transmit
 requests are sent to the vehicle bus while either transport is active.
+
+<p align="center">
+  <img src="Images/ui-can.png" alt="Settings — CAN Source (powertrain / comfort bus) and CAN Broadcast (enable, ID)" width="300">
+  &nbsp;&nbsp;
+  <img src="Images/ui-high-side.png" alt="Diagnostics — High-Side Override and the SavvyCAN WiFi / serial GVRET toggles" width="300">
+</p>
+
+*Settings → CAN Source and CAN Broadcast (left); Diagnostics → High-Side Override and SavvyCAN (right).*
 
 ---
 
@@ -347,20 +359,72 @@ A single stray CAN frame will **not** wake the AP, and a continuous stream that
 started while awake will **not** re-wake it after it sleeps — only a fresh
 quiet-to-active burst does. An ignition power-cycle always brings Wi-Fi back.
 
+The quiet-bus detection itself is tuned on **Settings → CAN Sleep Thresholds**: the
+**silence timer** (`canSilSec`) and **minimum frame rate** (`canMinFps`) both have to be
+crossed before the handheld is powered down, and the live frame rate is shown next to them
+so you can see what the parked bus actually does.
+
+<p align="center">
+  <img src="Images/ui-can-sleep.png" alt="Settings — CAN Sleep Thresholds: silence timer, minimum frame rate and the live frame rate" width="300">
+</p>
+
 ---
 
 ## Wi-Fi & Web Interface
 
-Connect to the **`AirLift-V2 Controller`** Wi-Fi access point and browse to
-**`http://192.168.1.1/`**. All changed settings are saved automatically.
+Connect to the **`AirLift-V2 Controller`** Wi-Fi access point (open network) and browse to
+**`http://192.168.1.1/`** or **`http://airlift.local/`**. All changed settings are saved automatically. Current firmware version: **2.11**, shown next to the header title in the Web UI and built on Forbes Automotive's shared dark theme (the same look used across OpenHaldex, Can2Cluster, SpeedPulser, SpeedPulserPro, can2rpm and the MQB Steering Wheel Controller).
 
 | Tab | Purpose |
 | --- | --- |
 | **Overview** | Live FL/FR/RL/RR/Tank PSI, compressor LED, mode, press-and-hold corner buttons (Pointer Events with a safety release), and bus health |
 | **Presets** | 8 named buttons + inline `(frontPsi, rearPsi)` editor |
-| **Settings** | Pass-through, intercept, air-out-on-ignition-off, air-up/down on fob double-press, CAN source + silence/min-FPS, CAN broadcast ID, SavvyCAN |
-| **Diagnostics** | High-side driver override, bus counters, CAN broadcast sent/errors |
-| **OTA** | Upload a firmware `.bin` over Wi-Fi and reboot |
+| **Settings** | Display units, pass-through / intercept mode, air-out-on-ignition-off, air-up/down on fob double-press (with targets and boot delay), CAN sleep thresholds (silence / min-FPS), CAN source, CAN broadcast ID |
+| **Diagnostics** | Bus health (LIN handheld / manifold, CAN), raw LIN frames, system status tiles, high-side driver override, SavvyCAN GVRET toggles and a timestamped event log |
+| **OTA** | Two-step firmware/web-UI update over Wi‑Fi — see [Over-the-Air Updates](#over-the-air-updates-two-step) below |
+
+
+<p align="center">
+  <img src="Images/ui-overview.png" alt="Overview — live corner and tank pressures, compressor and mode, press-and-hold corner controls" width="300">
+  &nbsp;&nbsp;
+  <img src="Images/ui-settings.png" alt="Settings — display units, mode (pass-through / intercept) and automatic air-out on ignition off" width="300">
+</p>
+<p align="center">
+  <img src="Images/ui-fob.png" alt="Settings — Fob Double Press Actions: air-up on double unlock with its target, air-down on double lock, controller boot delay" width="300">
+  &nbsp;&nbsp;
+  <img src="Images/ui-diagnostics.png" alt="Diagnostics — bus health, raw LIN frames and system status tiles" width="300">
+</p>
+
+*Overview and the Settings cards for mode / auto air-out (top); the fob double-press actions and the Diagnostics bus-health, raw-frame and status cards (bottom). The CAN cards are shown under [CAN / TWAI](#can--twai) above.*
+
+Every notable event — ignition, handheld button presses, fob actions, intercepted targets,
+compressor state and broadcast counters — is also written to the **Event Log** on the
+Diagnostics tab with a millisecond timestamp:
+
+<p align="center">
+  <img src="Images/ui-event-log.png" alt="Diagnostics — Event Log with auto-scroll and clear" width="300">
+</p>
+
+### Over-the-Air Updates (Two-Step)
+
+Firmware and the web UI live on separate flash partitions, so an OTA update is done in two steps:
+
+1. **Filesystem** — upload `littlefs.bin` (`POST /api/ota/fs`, written to the SPIFFS partition). Updates `index.html` / `app.js` / `style.css`; the device does **not** reboot after this step.
+2. **Firmware** — upload `firmware.bin` (`POST /api/ota`, written to the OTA app partition). Updates the application and reboots automatically once complete.
+
+`GET /api/ota/info` reports the running version.
+
+### Status Indicators
+
+Compressor, ignition/controller power and bus-diagnostics tiles use consistent colour-coded pills:
+
+| Colour | Meaning |
+|---|---|
+| 🟢 Green | Compressor running, ignition/controller powered on, CAN listener/high-side driver active, LIN bus wiring normal and healthy, CAN traffic present |
+| 🔴 Red | Compressor off/stale, ignition/controller off, CAN listener stopped, high-side driver off, or a LIN bus (handheld/manifold) is unhealthy |
+| 🟠 Orange | A "no signal, not necessarily broken" condition — specifically **no CAN frames currently arriving**, or the LIN bus wiring is detected **reversed** |
+
+The four corner/tank PSI gauges don't use these colours — they simply show `--` if the LIN bus data has gone stale for more than 5 seconds.
 
 ### Learn Mode
 
@@ -368,6 +432,19 @@ Enable a preset slot in the UI, then press the matching physical preset on the
 Controller: the next `01 16 47 …` target broadcast on the wire is captured into
 that slot (the wire carries no preset index, so the slot is bound to the button
 you press). Learn windows time-out after a few seconds.
+
+
+<p align="center">
+  <img src="Images/ui-presets.png" alt="Presets — the preset editor with named slots and front / rear PSI, plus the Learn from Controller button" width="300">
+  &nbsp;&nbsp;
+  <img src="Images/ui-learn.png" alt="Presets — Learning Presets card: one row per slot with Capture / Re-capture, Save to Presets and Cancel" width="300">
+</p>
+
+*Presets: the editor (left) and the learn card that **Learn from Controller** opens (right) — arm a slot, press that preset on the handheld, then Save.*
+
+<p align="center">
+  <img src="Images/ui-ota.png" alt="OTA tab — device information and two-step update" width="300">
+</p>
 
 ---
 
@@ -434,6 +511,8 @@ V2.01 — CAN/TWAI bridge (Powertrain/Comfort), pressure broadcast, SavvyCAN GVR
 V2.10 — power management (Wi-Fi-client idle + CAN wake-on-burst),
         deferred WiFi bring-up on wake, high-side auto-release, fob boot-delay,
         command-mode idle masking, and single-master gated serial debug.
+V2.11 — shared UI theme; common wifi_manager (airlift.local) + ota_manager
+        (two-step firmware + filesystem OTA, /api/ota + /api/ota/fs); cache-busting.
 ```
 
 ---
