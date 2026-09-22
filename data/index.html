@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>AirLift V2 Controller</title>
+  <link rel="stylesheet" href="style.css?v=2.12">
+</head>
+<body>
+  <main class="container">
+    <header class="topbar">
+      <h1>AirLift V2 <span id="fwVersion" class="fw-version">v--</span></h1>
+      <div class="badge-row">
+        <span id="ignBadge"  class="badge">Ignition: --</span>
+        <span id="pwrBadge"  class="badge">Controller: --</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="presets">Presets</button>
+      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="diagnostics">Diagnostics</button>
+      <button class="tab" data-tab="ota">OTA</button>
+    </nav>
+
+    <!-- ===================== OVERVIEW ===================== -->
+    <section id="tab-overview" class="panel active">
+      <article class="card">
+        <h2>Pressures (<span id="pressureUnitLabel">PSI</span>)</h2>
+        <div class="corner-grid">
+          <div class="corner">
+            <div class="corner-label">Left Front</div>
+            <div id="pFL" class="corner-value">--</div>
+          </div>
+          <div class="corner">
+            <div class="corner-label">Right Front</div>
+            <div id="pFR" class="corner-value">--</div>
+          </div>
+          <div class="corner">
+            <div class="corner-label">Left Rear</div>
+            <div id="pRL" class="corner-value">--</div>
+          </div>
+          <div class="corner">
+            <div class="corner-label">Right Rear</div>
+            <div id="pRR" class="corner-value">--</div>
+          </div>
+        </div>
+        <div class="tank">
+          <div class="corner-label">Tank</div>
+          <div id="pTank" class="corner-value">--</div>
+          <div id="compIndicator" class="comp-pill comp-off">Compressor: --</div>
+        </div>
+        <div class="help">Pressures from the manifold status frame.</div>
+      </article>
+
+      <article class="card">
+        <div class="card-head-row">
+          <h2>Controls</h2>
+          <label class="inline-select">
+            Mode
+            <select id="overviewMode">
+              <option value="manual" selected>Manual</option>
+              <option value="preset">Presets</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="manualControls" class="control-pane">
+          <div class="corner-grid">
+            <div class="corner">
+              <div class="corner-label">Left Front</div>
+              <div class="corner-btns">
+                <button class="btn small" data-corner="0" data-dir="0">▲ Up</button>
+                <button class="btn small" data-corner="0" data-dir="1">▼ Down</button>
+              </div>
+            </div>
+            <div class="corner">
+              <div class="corner-label">Right Front</div>
+              <div class="corner-btns">
+                <button class="btn small" data-corner="1" data-dir="0">▲ Up</button>
+                <button class="btn small" data-corner="1" data-dir="1">▼ Down</button>
+              </div>
+            </div>
+            <div class="corner">
+              <div class="corner-label">Left Rear</div>
+              <div class="corner-btns">
+                <button class="btn small" data-corner="2" data-dir="0">▲ Up</button>
+                <button class="btn small" data-corner="2" data-dir="1">▼ Down</button>
+              </div>
+            </div>
+            <div class="corner">
+              <div class="corner-label">Right Rear</div>
+              <div class="corner-btns">
+                <button class="btn small" data-corner="3" data-dir="0">▲ Up</button>
+                <button class="btn small" data-corner="3" data-dir="1">▼ Down</button>
+              </div>
+            </div>
+          <div class="corner all-corner">
+            <div class="corner-label">ALL</div>
+            <div class="corner-btns">
+              <button class="btn small" data-corner="4" data-dir="0">▲ All Up</button>
+              <button class="btn small" data-corner="4" data-dir="1">▼ Air Out</button>
+            </div>
+          </div>
+          </div><!-- end .corner-grid -->
+        </div><!-- end #manualControls -->
+
+        <div id="presetControls" class="control-pane hidden">
+          <div id="presetButtonGrid" class="preset-grid"></div>
+          <p class="help">Tap a preset to send its target pressure to the manifold.</p>
+        </div>
+        <div id="overviewStatus" class="status-line"></div>
+      </article>
+    </section>
+
+    <!-- ===================== PRESETS ===================== -->
+    <section id="tab-presets" class="panel">
+      <article class="card">
+        <h2>Preset Editor</h2>
+        <p class="help">
+          Each preset stores a front-axle and rear-axle target pressure. Tapping a
+          preset on the Overview tab makes the firmware emit the same
+          <code>01 16 47 …</code> target broadcast the real handheld sends after
+          selecting a preset, so the manifold treats it identically to a physical
+          preset press. Set both PSI values to 0 to leave a slot empty.
+        </p>
+        <table>
+          <thead><tr><th>#</th><th>Name</th><th>Front PSI</th><th>Rear PSI</th></tr></thead>
+          <tbody id="presetRows"></tbody>
+        </table>
+        <div class="button-row"><button id="savePresetsBtn" class="btn">Save Presets</button>
+          <button id="learnPresetsBtn" class="btn secondary">Learn from Controller</button></div>
+        <div id="presetsStatus" class="status-line"></div>
+      </article>
+
+      <article id="learnCard" class="card" style="display:none;">
+        <h2>Learning Presets…</h2>
+        <p class="help">
+          The controller doesn't transmit which preset number was pressed — only the
+          target pressures. So pick the slot below, press <strong>Capture</strong>,
+          then press that preset on the physical controller; its target lands in that
+          exact slot (in any order). Repeat for each preset, then hit <strong>Save</strong>.
+          <span id="learnRemain" class="mono"></span>
+        </p>
+        <table>
+          <thead><tr><th>#</th><th>Front PSI</th><th>Rear PSI</th><th></th></tr></thead>
+          <tbody id="learnRows"></tbody>
+        </table>
+        <div class="button-row">
+          <button id="learnSaveBtn" class="btn">Save to Presets</button>
+          <button id="learnStopBtn" class="btn secondary">Cancel</button>
+        </div>
+        <div id="learnStatus" class="status-line"></div>
+      </article>
+    </section>
+
+    <!-- ===================== SETTINGS ===================== -->
+    <section id="tab-settings" class="panel">
+      <article class="card">
+        <h2>Display</h2>
+        <div class="form-grid">
+          <label class="toggle-row">
+            <span>Show pressures in bar</span>
+            <input id="useBar" type="checkbox">
+          </label>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Mode</h2>
+        <div class="form-grid">
+          <label class="toggle-row">
+            <span>Pass-Through Mode</span>
+            <input id="passThroughMode" type="checkbox">
+          </label>
+        </div>
+        <p class="help">
+          Leave this <strong>off</strong> for normal use. The ESP32 already rests
+          as a transparent wire — the handheld's original buttons work directly —
+          and only seizes the manifold bus for the brief moment you trigger a
+          preset or corner command from this UI, then hands control straight
+          back. Turn it <strong>on</strong> as a debugging override to force a
+          pure byte-for-byte relay: <strong>all</strong> injection and auto
+          air-out are suppressed and our controller never transmits, so you can
+          watch the untouched OEM traffic.
+        </p>
+      </article>
+
+      <article class="card">
+        <h2>Automatic Air-Out</h2>
+        <div class="form-grid">
+          <label class="toggle-row">
+            <span>Air Out on Ignition Off</span>
+            <input id="airOutOnIgnOff" type="checkbox">
+          </label>
+          <label class="toggle-row">
+            <span>Ignition monitoring via aux input</span>
+            <input id="ignitionSenseGpio" type="checkbox">
+          </label>
+          <label>
+            Air-down target
+            <select id="airDownPreset"></select>
+          </label>
+          <label>
+            Manual front PSI
+            <input id="airDownFrontPsi" type="number" min="0" max="200" value="0">
+          </label>
+          <label>
+            Manual rear PSI
+            <input id="airDownRearPsi" type="number" min="0" max="200" value="0">
+          </label>
+        </div>
+        <div id="settingsStatus" class="status-line"></div>
+        <p class="help">
+          When ignition switches off (CAN bus silent &gt; 3 s) and Air Out is enabled,
+          the selected preset is replayed for 10 s, then a further 10 s delay elapses
+          before the controller is powered down. With <em>Manual</em>, the controller
+          uses pressure feedback to pulse each axle until it reaches the entered target.
+        </p>
+        <p class="help">
+          <strong>Ignition monitoring via aux input</strong> reads a hard-wired
+          ignition signal on the auxiliary input (GPIO 39, HIGH = ignition on)
+          instead of waiting for the CAN bus to fall silent. It reacts instantly,
+          then waits a 10 s buffer once ignition is off before airing out (so a
+          crank or brief stall doesn't dump the bags). Leave off to detect
+          ignition from CAN.
+        </p>
+      </article>
+
+      <article class="card">
+        <h2>Fob Double Press Actions</h2>
+        <div class="form-grid">
+          <label class="toggle-row">
+            <span>Double unlock: air up</span>
+            <input id="airUpOnFobDouble" type="checkbox">
+          </label>
+          <label>
+            Air-up target
+            <select id="airUpPreset"></select>
+          </label>
+          <label>
+            Manual front PSI
+            <input id="airUpFrontPsi" type="number" min="0" max="200" value="0">
+          </label>
+          <label>
+            Manual rear PSI
+            <input id="airUpRearPsi" type="number" min="0" max="200" value="0">
+          </label>
+          <label class="toggle-row">
+            <span>Double lock: air down</span>
+            <input id="airDownOnFobDouble" type="checkbox">
+          </label>
+        </div>
+        <div class="brightness-row">
+          <span class="toggle-label">Controller boot delay</span>
+          <div class="brightness-controls">
+            <input type="range" id="controllerBootDelayRange" min="0" max="10000" step="250" value="5000" class="slider-inline">
+            <span id="controllerBootDelayValue">5.0</span> s
+          </div>
+        </div>
+        <p class="help">Only remote-fob commands on Comfort CAN are accepted. Press the same fob button twice within 5 seconds to run its enabled action. The <strong>boot delay</strong> holds the air-up/down command after a cold wake so the handheld can finish its Preset/Manual handshake first — increase it if you still see a comms error, decrease it for a faster response.</p>
+      </article>
+
+      <article class="card">
+        <h2>CAN Sleep Thresholds</h2>
+        <p class="help">
+          The handheld is powered down when the vehicle CAN bus goes quiet.
+          "Quiet" means <strong>both</strong> conditions are true: time since the
+          last frame exceeds the silence timer, AND the live frame rate has
+          dropped below the floor. Either condition alone keeps the controller on.
+        </p>
+        <div class="brightness-row">
+          <span class="toggle-label">Silence timer</span>
+          <div class="brightness-controls">
+            <input type="range" id="canSilenceSecRange" min="0" max="60" step="1" value="10" class="slider-inline">
+            <span id="canSilenceSecValue">10</span> s
+          </div>
+        </div>
+        <div class="brightness-row">
+          <span class="toggle-label">Minimum frame rate</span>
+          <div class="brightness-controls">
+            <input type="range" id="canMinFpsRange" min="0" max="2000" step="10" value="50" class="slider-inline">
+            <span id="canMinFpsValue">50</span> fps
+          </div>
+        </div>
+        <div class="brightness-row">
+          <span class="toggle-label">Live frame rate</span>
+          <div class="brightness-controls">
+            <span id="canLiveFps">--</span> fps
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>CAN Source</h2>
+        <div class="form-grid">
+          <label class="toggle-row">
+            <span>Use Powertrain CAN</span>
+            <input type="checkbox" id="usePowertrainCan">
+          </label>
+          <label class="toggle-row">
+            <span>Use Comfort CAN</span>
+            <input type="checkbox" id="useComfortCan">
+          </label>
+        </div>
+        <p class="help">Powertrain CAN uses the quiet-bus ignition rule. Comfort CAN uses the captured fob-command frame and runs at the Comfort bus bitrate.</p>
+      </article>
+
+      <article class="card">
+        <h2>CAN Broadcast</h2>
+        <p class="help">
+          When enabled, the firmware transmits an 8-byte frame at ~10 Hz on the
+          ID below. Payload:
+          <code>[0]FL [1]FR [2]RL [3]RR [4]Tank</code> (raw PSI&times;2),
+          <code>[5]flags</code> (bit0 compOn, bit1 ignOn, bit2 intercept,
+          bit3 passthru, bits4-5 mode), <code>[6]seq</code>, <code>[7]0</code>.
+          Switching this on takes the CAN driver out of listen-only mode &mdash; do
+          not enable on a bus you don't own.
+        </p>
+        <label class="toggle-row">
+          <span class="toggle-label">Broadcast pressures via CAN</span>
+          <input type="checkbox" id="canBroadcastEnabled">
+        </label>
+        <div class="brightness-row">
+          <span class="toggle-label">CAN ID (hex, 11-bit)</span>
+          <div class="brightness-controls">
+            0x<input type="text" id="canBroadcastIdHex" maxlength="3" value="520"
+                    style="width:4em;text-transform:uppercase;font-family:monospace;">
+          </div>
+        </div>
+        <div class="brightness-row">
+          <span class="toggle-label">Frames sent / errors</span>
+          <div class="brightness-controls">
+            <span id="canBcSent">--</span> / <span id="canBcErrors">--</span>
+          </div>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- ===================== DIAGNOSTICS ===================== -->
+    <section id="tab-diagnostics" class="panel">
+      <article class="card">
+        <h2>Bus Health</h2>
+        <div class="grid-3">
+          <div class="tile"><div class="label">Handheld bus</div><div id="busHealthH" class="value">--</div></div>
+          <div class="tile"><div class="label">Manifold bus</div><div id="busHealthM" class="value">--</div></div>
+          <div class="tile"><div class="label">Wiring</div><div id="busWiring" class="value">--</div></div>
+        </div>
+        <p class="help">
+          <strong>Healthy</strong> means normal traffic is being seen on that bus;
+          <strong>No traffic</strong> means that side has gone quiet. If the two
+          plugs are swapped the firmware detects the reversed wiring and corrects
+          the roles automatically — no need to re-pin the connector.
+        </p>
+      </article>
+
+      <article class="card">
+        <h2>Raw Frames</h2>
+        <div class="mono-block"><div class="label">Last from controller</div><div id="lastBtn" class="mono">--</div></div>
+        <div class="mono-block"><div class="label">Last from manifold</div><div id="lastMan" class="mono">--</div></div>
+      </article>
+
+      <article class="card">
+        <h2>System Status</h2>
+        <div class="grid-3">
+          <div class="tile"><div class="label">CAN frames</div><div id="canFrames" class="value">--</div></div>
+          <div class="tile"><div class="label">High-side GPIO</div><div id="highSideStatus" class="value">--</div></div>
+          <div class="tile"><div class="label">CAN listener</div><div id="canStatus" class="value">--</div></div>
+          <div class="tile"><div class="label">CAN traffic</div><div id="canTrafficStatus" class="value">--</div></div>
+          <div class="tile"><div class="label">C→M frames</div><div id="framesC2M" class="value">--</div></div>
+          <div class="tile"><div class="label">M→C frames</div><div id="framesM2C" class="value">--</div></div>
+          <div class="tile"><div class="label">Ctrl RX bytes</div><div id="rxBytesC" class="value">--</div></div>
+          <div class="tile"><div class="label">Mfld RX bytes</div><div id="rxBytesM" class="value">--</div></div>
+          <div class="tile"><div class="label">Last fob event</div><div id="comfortLockState" class="value">--</div></div>
+          <div class="tile"><div class="label">SavvyCAN drops</div><div id="savvyCanDrops" class="value">--</div></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>High-Side Override</h2>
+        <label class="toggle-row">
+          <span>Force high-side GPIO on</span>
+          <input id="highSideOverride" type="checkbox">
+        </label>
+        <p class="help">This diagnostic override drives GPIO 21 directly and remains active until the controller reboots.</p>
+      </article>
+
+      <article class="card">
+        <h2>SavvyCAN</h2>
+        <div class="form-grid">
+          <label class="toggle-row">
+            <span>Enable WiFi GVRET (TCP port 23)</span>
+            <input type="checkbox" id="savvyCanWifiEnabled">
+          </label>
+          <label class="toggle-row">
+            <span>Enable Serial GVRET (1 Mbaud)</span>
+            <input type="checkbox" id="savvyCanSerialEnabled">
+          </label>
+        </div>
+        <p class="help">WiFi and serial modes are mutually exclusive. Both provide SavvyCAN's GVRET interface and allow SavvyCAN to transmit frames.</p>
+      </article>
+
+      <article class="card">
+        <h2>Event Log</h2>
+        <div class="button-row">
+          <label class="toggle-row" style="flex:0 0 auto;gap:.5rem;">
+            <span>Auto-scroll</span>
+            <input id="logAutoScroll" type="checkbox" checked>
+          </label>
+          <button id="logClearBtn" class="btn secondary">Clear</button>
+        </div>
+        <pre id="logView" class="log-view"></pre>
+      </article>
+    </section>
+
+    <!-- ===================== OTA ===================== -->
+    <section id="tab-ota" class="panel">
+      <article class="card">
+        <h2>Device</h2>
+        <div class="ota-info">
+          <div><span>Firmware</span><strong id="otaFwVersion">--</strong></div>
+          <div><span>Web UI</span><strong id="otaFsVersion">--</strong></div>
+          <div><span>Board</span><strong id="otaBoard">--</strong></div>
+          <div><span>Updates</span><strong id="otaSafe">--</strong></div>
+        </div>
+        <p class="hint" id="otaSafeHint"></p>
+      </article>
+
+      <article class="card">
+        <h2>Update from GitHub</h2>
+        <div class="ota-info">
+          <div><span>Installed</span><strong id="updInstalled">--</strong></div>
+          <div><span>Latest</span><strong id="updLatest">--</strong></div>
+          <div><span>Status</span><strong id="updState">Not checked</strong></div>
+        </div>
+        <p class="hint">This browser needs internet while it can still reach the controller: join the controller to your
+          router in <a href="#otaWifiStaCard" id="updGoBridge">Home WiFi</a> below, put this phone on the same network and
+          open the address that card shows. On the controller's own access point alone most phones drop mobile data.
+          Keep this page open until the device has rebooted. Release channel: <code id="updRepo">--</code></p>
+        <div class="ota-row">
+          <button id="updCheckBtn" class="btn primary">Check for updates</button>
+          <button id="updBridgeBtn" class="btn" hidden>Set up Home WiFi</button>
+          <label class="upd-beta"><input type="checkbox" id="updShowAll"> Show beta / older versions</label>
+        </div>
+        <div id="updStatus" class="status-line">Idle</div>
+        <div id="updPicker" hidden>
+          <label class="ota-field">Version
+            <select id="updVersion"></select>
+          </label>
+          <div id="updNotes" class="upd-notes"></div>
+          <div class="ota-row">
+            <button id="updInstallBtn" class="btn primary">Install selected</button>
+          </div>
+        </div>
+        <div class="ota-steps" id="updSteps">
+          <div class="ota-step" data-step="dlfs"><span class="ota-step-num">1</span> Get UI</div>
+          <div class="ota-step" data-step="fs"><span class="ota-step-num">2</span> Flash UI</div>
+          <div class="ota-step" data-step="verify"><span class="ota-step-num">3</span> Verify</div>
+          <div class="ota-step" data-step="dlfw"><span class="ota-step-num">4</span> Get FW</div>
+          <div class="ota-step" data-step="fw"><span class="ota-step-num">5</span> Flash FW</div>
+          <div class="ota-step" data-step="reboot"><span class="ota-step-num">6</span> Reboot</div>
+        </div>
+        <div class="ota-progress" id="updProgressWrap" hidden>
+          <div class="ota-progress-bar" id="updProgressBar"></div>
+          <span class="ota-progress-label" id="updProgressLabel">0%</span>
+        </div>
+      </article>
+
+      <article class="card" id="otaWifiStaCard">
+        <h2>Home WiFi (Bridge Mode)</h2>
+        <p class="hint">Join the controller to your home or garage router; its own access point keeps running. Once it
+          shows <em>Connected</em>, put this phone on the same network, open the address shown and press
+          <strong>Check for updates</strong> again.</p>
+        <p class="status-line" id="otaWifiStaStatus">--</p>
+        <div class="ota-wifi-row">
+          <input type="text" id="otaWifiStaSsidInput" placeholder="Home network name" maxlength="32" autocomplete="off" spellcheck="false" list="otaWifiStaSsidList">
+          <datalist id="otaWifiStaSsidList"></datalist>
+          <button class="btn ota-icon" id="otaWifiStaScan" title="Scan for networks">&#128269;</button>
+        </div>
+        <div class="ota-wifi-row">
+          <input type="password" id="otaWifiStaPasswordInput" placeholder="Home network password (blank = open)" maxlength="64" autocomplete="new-password">
+          <button class="btn ota-icon" id="otaWifiStaPasswordToggle" title="Show / hide password">&#128065;</button>
+        </div>
+        <div class="ota-row">
+          <button class="btn" id="otaWifiStaSave">Save &amp; Apply</button>
+          <button class="btn" id="otaWifiStaReset">Disable</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Update from Files</h2>
+        <p class="hint">No internet needed here. Download <code>littlefs.bin</code> and <code>firmware.bin</code> from the
+          newest <code>V…</code> folder under <code>Releases/</code> on GitHub, then upload them here:
+          <strong>Filesystem</strong> (littlefs.bin, the web interface) first, then <strong>Firmware</strong>
+          (firmware.bin). The device reboots once the firmware upload completes.</p>
+        <div class="ota-steps" id="otaSteps">
+          <div class="ota-step" data-step="filesystem"><span class="ota-step-num">1</span> Filesystem</div>
+          <div class="ota-step" data-step="firmware"><span class="ota-step-num">2</span> Firmware</div>
+        </div>
+        <label class="ota-field">Update Type
+          <select id="otaType">
+            <option value="filesystem">Filesystem (web UI)</option>
+            <option value="firmware">Firmware (application)</option>
+          </select>
+        </label>
+        <label class="ota-field">Binary (.bin)
+          <input id="otaBin" type="file" accept=".bin,application/octet-stream">
+        </label>
+        <div class="ota-progress" id="otaProgressWrap" hidden>
+          <div class="ota-progress-bar" id="otaProgressBar"></div>
+          <span class="ota-progress-label" id="otaProgressLabel">0%</span>
+        </div>
+        <div class="ota-row">
+          <button id="otaUploadBtn" class="btn primary">Upload</button>
+        </div>
+        <div id="otaStatus" class="status-line">Idle</div>
+      </article>
+    </section>
+  </main>
+  <script src="app.js?v=2.12"></script>
+  <script src="ota.js?v=2.12"></script>
+</body>
+</html>
