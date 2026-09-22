@@ -3,9 +3,9 @@
 // ---------------------------------------------------------------------------
 // Firmware version
 // ---------------------------------------------------------------------------
-// V2.11 - shared UI theme; common wifi_manager (airlift.local) + ota_manager
-//         (firmware + filesystem OTA, /api/ota + /api/ota/fs); cache-busting.
-#define FW_VERSION "2.11"
+// V2.12 - OTA overhaul: shared ota_manager/wifi_manager v2 + ota.js (guided
+//         GitHub update, Home WiFi bridge mode, recovery page).
+#define FW_VERSION "2.12"
 
 /*
 
@@ -32,4 +32,16 @@ V2.10 - power management + wake fixes:
           the manifold's status / pressure frames, so it no longer flags a comms
           error while we drive a preset.
 
+V2.12 - OTA overhaul (shared ota_manager / wifi_manager v2 + data/ota.js, ported
+        from OpenHaldex 9.00): upload callbacks no longer answer mid-body (the
+        old per-chunk "200 OK" made the browser drop the connection after the
+        first 1.4 kB - a crash in AsyncTCP and a half-written partition, so no
+        OTA through the UI had ever completed); filesystem updates unmount
+        first, check the announced size, verify the mount and wipe on failure;
+        boot only mounts a sane superblock and the web server always starts -
+        with no usable UI "/" is a recovery page with the two uploads.
+        "Update from GitHub" on the OTA tab (Releases/releases.json via
+        tools/make_release.py) plus a Home WiFi (bridge mode) card; power_manager
+        holds WiFi up while any browser is active. Assets served no-cache (ETag)
+        instead of the hand-bumped ?v=.
 */

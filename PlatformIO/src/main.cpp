@@ -5,6 +5,7 @@
 #include "defs.h"
 #include "io.h"
 #include "power_manager.h"
+#include "wifi_manager.h"
 #include "SavvyCAN.h"
 #include "tasks.h"
 
@@ -30,4 +31,5 @@ void setup() {
 
 void loop() {
   vTaskDelay(pdMS_TO_TICKS(1000));
+  wifiManagerTick(); // Home WiFi (bridge mode): connection tracking + retry back-off
 }
