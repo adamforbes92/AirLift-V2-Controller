@@ -109,7 +109,16 @@ void setupWiFi() {
   wifimgr_config_t wcfg = wifiDefaultConfig();
   wcfg.hostName  = wifiHostName;
   wcfg.mdnsName  = "airlift";   // -> http://airlift.local
-  wcfg.fwVersion = FW_VERSION;  // injected into index.html for cache-busting
+  wcfg.fwVersion = FW_VERSION;  // recovery page only; index.html bakes its own
+  // MUST precede wifiManagerInit(): that mounts the web-UI filesystem via
+  // otaFsMountSafe(), so ota_manager has to be configured first or a failed
+  // mount passes silently.
+  ota_config_t ocfg = otaDefaultConfig();
+  ocfg.fwVersion  = FW_VERSION;
+  ocfg.product    = "AirLift Controller";
+  ocfg.githubRepo = "adamforbes92/AirLift-V2-Controller"; // Releases/ + releases.json for "Check for updates"
+  otaManagerInit(&ocfg);
+
   wifiManagerInit(&wcfg);
   DEBUG_WIFI("AP up: SSID=%s  IP=%s", wifiHostName, WiFi.softAPIP().toString().c_str());
 }
@@ -143,11 +152,6 @@ void setupApiServer() {
   // Shared OTA + Home WiFi routes FIRST: ota_manager's first route carries the
   // filter that notes web activity for every request (otaWebClientActive()),
   // and /api/wifi/sta must precede any /api/wifi... route of our own.
-  ota_config_t ocfg = otaDefaultConfig();
-  ocfg.fwVersion  = FW_VERSION;
-  ocfg.product    = "AirLift Controller";
-  ocfg.githubRepo = "adamforbes92/AirLift-V2-Controller"; // Releases/ + releases.json for "Check for updates"
-  otaManagerInit(&ocfg);
   otaManagerAttach(server);
   wifiManagerAttachSta(server);
 
