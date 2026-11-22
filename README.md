@@ -513,6 +513,8 @@ V2.10 — power management (Wi-Fi-client idle + CAN wake-on-burst),
         command-mode idle masking, and single-master gated serial debug.
 V2.11 — shared UI theme; common wifi_manager (airlift.local) + ota_manager
         (two-step firmware + filesystem OTA, /api/ota + /api/ota/fs); cache-busting.
+V2.14 — phone touch UI: no long-press copy menu; scrolling the page never moves a
+        slider (shared touchui.js/css).
 ```
 
 ---

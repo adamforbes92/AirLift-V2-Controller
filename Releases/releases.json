@@ -1,11 +1,54 @@
 {
   "product": "AirLiftController",
-  "latest": "2.13",
+  "latest": "2.14",
   "latestByBoard": {
-    "esp32": "2.13",
-    "esp32s3": "2.13"
+    "esp32": "2.14",
+    "esp32s3": "2.14"
   },
   "releases": [
+    {
+      "version": "2.14",
+      "channel": "stable",
+      "date": "2026-11-22",
+      "ota": true,
+      "notes": "Phone touch UI: no long-press copy menu; scrolling the page never moves a slider (shared touchui.js/css).",
+      "boards": {
+        "esp32": {
+          "firmware": {
+            "path": "V2.14/firmware.bin",
+            "size": 1165008,
+            "sha256": "3813e72f1fd7a6160b0c2462411503e8a51954aefcdafe2f833c79c84e062460"
+          },
+          "filesystem": {
+            "path": "V2.14/littlefs.bin",
+            "size": 655360,
+            "sha256": "f52a7b158677d94caec7afda8c40bd27d84edfbc7f2425ef5b266160a81fe5c8"
+          }
+        },
+        "esp32s3": {
+          "firmware": {
+            "path": "V2.14-S3/firmware.bin",
+            "size": 1145520,
+            "sha256": "9af3e6b4b3f644348e3ee4739bb8bffad78eceb7b5971da4349921362c0158c6"
+          },
+          "filesystem": {
+            "path": "V2.14-S3/littlefs.bin",
+            "size": 1048576,
+            "sha256": "ee59ae97a2e95b86059c33cf18174eee91ab686f05b54ae0fa5574d46eb4a3b1"
+          }
+        }
+      },
+      "firmware": {
+        "path": "V2.14/firmware.bin",
+        "size": 1165008,
+        "sha256": "3813e72f1fd7a6160b0c2462411503e8a51954aefcdafe2f833c79c84e062460"
+      },
+      "filesystem": {
+        "path": "V2.14/littlefs.bin",
+        "size": 655360,
+        "sha256": "f52a7b158677d94caec7afda8c40bd27d84edfbc7f2425ef5b266160a81fe5c8"
+      }
+    },
     {
       "version": "2.13",
       "channel": "stable",
